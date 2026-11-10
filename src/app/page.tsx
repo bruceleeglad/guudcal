@@ -39,6 +39,28 @@ export default function GuudCalPage() {
   const faqs = FAQ_DATA[lang];
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [pricingTab, setPricingTab] = useState<'suite' | 'cal' | 'crm'>('suite');
+  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+
+  const handleCheckout = async (tier: 'solo' | 'agency' | 'lifetime') => {
+    try {
+      setCheckoutLoading(tier);
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ module: pricingTab, tier })
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert(data.error || 'Kunne ikke starte betaling');
+      }
+    } catch (e: any) {
+      alert('Fejl under checkout: ' + (e.message || 'Ukendt fejl'));
+    } finally {
+      setCheckoutLoading(null);
+    }
+  };
   const questions = t.questions;
   const totalQuestions = questions.length;
   const isQuizDone = currentStep >= totalQuestions;
@@ -1260,10 +1282,15 @@ export default function GuudCalPage() {
               </div>
 
               <button
-                onClick={() => alert(`Bestilling åbnes for ${pricingTab === 'suite' ? 'GuudSuite Solo (299 kr.)' : pricingTab === 'cal' ? 'GuudCal Solo (199 kr.)' : 'GuudCRM Solo (199 kr.)'}`)}
-                className="w-full py-3 px-4 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white font-bold text-xs uppercase tracking-wider transition-all border border-neutral-700 text-center"
+                onClick={() => handleCheckout('solo')}
+                disabled={checkoutLoading === 'solo'}
+                className="w-full py-3 px-4 rounded-xl bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50 text-white font-bold text-xs uppercase tracking-wider transition-all border border-neutral-700 text-center flex items-center justify-center gap-2"
               >
-                Vælg Solo Plan &rarr;
+                {checkoutLoading === 'solo' ? (
+                  <span>Opretter betaling...</span>
+                ) : (
+                  <span>Vælg Solo Plan &rarr;</span>
+                )}
               </button>
             </div>
 
@@ -1328,10 +1355,15 @@ export default function GuudCalPage() {
               </div>
 
               <button
-                onClick={() => alert(`Bestilling åbnes for ${pricingTab === 'suite' ? 'GuudSuite Agency Pro (399 kr.)' : pricingTab === 'cal' ? 'GuudCal Agency Pro (349 kr.)' : 'GuudCRM Pro (349 kr.)'}`)}
-                className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 text-neutral-950 font-black text-xs uppercase tracking-wider transition-all hover:brightness-110 shadow-lg shadow-emerald-500/20 text-center"
+                onClick={() => handleCheckout('agency')}
+                disabled={checkoutLoading === 'agency'}
+                className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 text-neutral-950 font-black text-xs uppercase tracking-wider transition-all hover:brightness-110 disabled:opacity-50 shadow-lg shadow-emerald-500/20 text-center flex items-center justify-center gap-2"
               >
-                Vælg Pro Plan &rarr;
+                {checkoutLoading === 'agency' ? (
+                  <span>Opretter betaling...</span>
+                ) : (
+                  <span>Vælg Pro Plan &rarr;</span>
+                )}
               </button>
             </div>
 
@@ -1390,10 +1422,15 @@ export default function GuudCalPage() {
               </div>
 
               <button
-                onClick={() => alert(`Bestilling åbnes for ${pricingTab === 'suite' ? 'Lifetime GuudSuite (7.999 kr.)' : pricingTab === 'cal' ? 'Lifetime GuudCal (4.999 kr.)' : 'Lifetime GuudCRM (4.999 kr.)'}`)}
-                className="w-full py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-black text-xs uppercase tracking-wider transition-all text-center shadow-lg shadow-amber-500/20"
+                onClick={() => handleCheckout('lifetime')}
+                disabled={checkoutLoading === 'lifetime'}
+                className="w-full py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-neutral-950 font-black text-xs uppercase tracking-wider transition-all text-center shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2"
               >
-                Vælg Lifetime Plan &rarr;
+                {checkoutLoading === 'lifetime' ? (
+                  <span>Opretter betaling...</span>
+                ) : (
+                  <span>Vælg Lifetime Plan &rarr;</span>
+                )}
               </button>
             </div>
           </div>
