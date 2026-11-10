@@ -65,7 +65,8 @@ const PRICING_CONFIG: Record<string, { name: string; amount: number; mode: 'subs
 
 export async function POST(req: Request) {
   try {
-    const stripeKey = process.env.STRIPE_SECRET_KEY;
+    const rawKey = process.env.STRIPE_SECRET_KEY || '';
+    const stripeKey = rawKey.replace(/^["']|["']$/g, '').trim();
     if (!stripeKey) {
       return NextResponse.json({ error: 'Stripe er ikke konfigureret på serveren' }, { status: 500 });
     }
