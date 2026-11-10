@@ -3,6 +3,15 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 
+interface CallNotesData {
+  executiveSummary?: string;
+  currentTechStack?: string[];
+  budgetAndAuthority?: string;
+  customerObjections?: string[];
+  nextActionItems?: { task: string; owner: string; deadline: string }[];
+  draftFollowUpEmail?: { subject: string; body: string };
+}
+
 interface Deal {
   id: string;
   name: string;
@@ -11,7 +20,7 @@ interface Deal {
   value: number;
   score: number;
   stage: 'new' | 'called' | 'proposal' | 'won';
-  lastCallNotes?: any;
+  lastCallNotes?: CallNotesData;
 }
 
 interface LicenseInfo {
@@ -118,7 +127,22 @@ export default function GuudCRMPage() {
   };
 
   useEffect(() => {
-    loadLicense(selectedLicenseKey);
+    let ignore = false;
+    const fetchLicense = async () => {
+      try {
+        const res = await fetch(`/api/crm/license?key=${selectedLicenseKey}`);
+        const data = await res.json();
+        if (!ignore && data.success && data.license) {
+          setLicenseData(data.license);
+        }
+      } catch (e) {
+        console.error('Failed to load license', e);
+      }
+    };
+    fetchLicense();
+    return () => {
+      ignore = true;
+    };
   }, [selectedLicenseKey]);
 
   const handleSimulateCloudTalk = async (dealId: string) => {
@@ -197,8 +221,9 @@ export default function GuudCRMPage() {
       } else {
         setDomainFeedback({ type: 'error', message: result.message || result.error });
       }
-    } catch (err: any) {
-      setDomainFeedback({ type: 'error', message: err.message || 'Netværksfejl under tilføjelse af domæne' });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Netværksfejl under tilføjelse af domæne';
+      setDomainFeedback({ type: 'error', message: msg });
     }
   };
 
@@ -553,7 +578,7 @@ export default function GuudCRMPage() {
                           Handlingspunkter (Næste Skridt):
                         </span>
                         <ul className="space-y-1.5 text-neutral-300">
-                          {selectedDeal.lastCallNotes.nextActionItems.map((item: any, idx: number) => (
+                          {selectedDeal.lastCallNotes.nextActionItems.map((item: { task: string; owner: string; deadline: string }, idx: number) => (
                             <li key={idx} className="flex items-start justify-between gap-2 text-[11px]">
                               <span>&bull; {item.task} ({item.owner})</span>
                               <span className="text-neutral-500 font-mono whitespace-nowrap">{item.deadline}</span>
@@ -571,7 +596,7 @@ export default function GuudCRMPage() {
                             ✉️ Klar Opfølgningsmail
                           </span>
                           <button
-                            onClick={() => copyEmailToClipboard(selectedDeal.lastCallNotes.draftFollowUpEmail.body)}
+                            onClick={() => copyEmailToClipboard(selectedDeal.lastCallNotes?.draftFollowUpEmail?.body || '')}
                             className="text-[10px] font-mono text-neutral-400 hover:text-white underline"
                           >
                             {copiedEmail ? '✓ Kopieret!' : '[Kopier Mail]'}
@@ -822,7 +847,7 @@ export default function GuudCRMPage() {
                         </span>
                       </div>
                       <p className="text-neutral-400 text-[11px]">
-                        DeepSeek Flash 1017 og OpenRouter er 100% skjult for klienter og netværkssniffere. Alle API svar og HTTP-headers udskrives som "GuudEngine™ Neural-v4".
+                        DeepSeek Flash 1017 og OpenRouter er 100% skjult for klienter og netværkssniffere. Alle API svar og HTTP-headers udskrives som &quot;GuudEngine™ Neural-v4&quot;.
                       </p>
                     </div>
 
@@ -834,7 +859,7 @@ export default function GuudCRMPage() {
                         </span>
                       </div>
                       <p className="text-neutral-400 text-[11px]">
-                        Forsøg på at manipulere prompten ("ignore previous instructions", system leakage) strippes automatisk i <code className="text-neutral-300">security.ts</code> inden AI-kaldet.
+                        Forsøg på at manipulere prompten (&quot;ignore previous instructions&quot;, system leakage) strippes automatisk i <code className="text-neutral-300">security.ts</code> inden AI-kaldet.
                       </p>
                     </div>
 

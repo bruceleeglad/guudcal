@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
+import { GUUD_SECURITY_HEADERS } from '@/lib/security';
 
 const PRICING_CONFIG: Record<string, { name: string; amount: number; mode: 'subscription' | 'payment'; description: string }> = {
   // GuudSuite (Bundle)
@@ -71,9 +72,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Stripe er ikke konfigureret på serveren' }, { status: 500 });
     }
 
-    const stripe = new Stripe(stripeKey, {
-      apiVersion: '2025-02-24.acacia' as any
-    });
+    const stripe = new Stripe(stripeKey);
 
     const body = await req.json();
     const { module = 'suite', tier = 'agency', customerEmail } = body;
@@ -85,9 +84,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: `Ugyldig pakke: ${planKey}` }, { status: 400 });
     }
 
-    const host = req.headers.get('host') || 'guudcal.vercel.app';
-    const protocol = host.includes('localhost') ? 'http' : 'https';
-    const baseUrl = `${protocol}://${host}`;
+    const rawHost = req.headers.get('host') || 'guudcal.vercel.app';
+    const isLocal = rawHost.includes('localhost') || rawHost.includes('127.0.0.1');
+    const allowedHosts = ['guudcal.vercel.app', 'cal.guud.pro', 'guudcal.onrender.com'];
+    const safeHost = isLocal ? rawHost : (allowedHosts.includes(rawHost) ? rawHost : 'guudcal.vercel.app');
+    const protocol = isLocal ? 'http' : 'https';
+    const baseUrl = `${protocol}://${safeHost}`;
 
     const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
       {
@@ -119,9 +121,10 @@ export async function POST(req: Request) {
       billing_address_collection: 'auto'
     });
 
-    return NextResponse.json({ url: session.url, sessionId: session.id });
-  } catch (err: any) {
+    return NextResponse.json({ url: session.url, sessionId: session.id }, { headers: GUUD_SECURITY_HEADERS });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Kunne ikke oprette Stripe session';
     console.error('Stripe Checkout Error:', err);
-    return NextResponse.json({ error: err.message || 'Kunne ikke oprette Stripe session' }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: 500, headers: GUUD_SECURITY_HEADERS });
   }
 }

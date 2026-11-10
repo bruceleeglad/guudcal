@@ -1,10 +1,36 @@
 import { NextResponse } from 'next/server';
+import { GUUD_SECURITY_HEADERS } from '@/lib/security';
+
+function isDisallowedHost(host: string): boolean {
+  const cleanHost = host.toLowerCase().trim();
+  if (
+    cleanHost === 'localhost' ||
+    cleanHost === '127.0.0.1' ||
+    cleanHost === '0.0.0.0' ||
+    cleanHost === '::1' ||
+    cleanHost.startsWith('127.') ||
+    cleanHost.startsWith('10.') ||
+    cleanHost.startsWith('192.168.') ||
+    cleanHost.startsWith('169.254.') || // Cloud metadata & link-local
+    cleanHost.endsWith('.internal') ||
+    cleanHost.endsWith('.local')
+  ) {
+    return true;
+  }
+  // Check RFC1918 172.16.0.0/12
+  const ipMatch = cleanHost.match(/^172\.(\d+)\./);
+  if (ipMatch) {
+    const secondOctet = parseInt(ipMatch[1], 10);
+    if (secondOctet >= 16 && secondOctet <= 31) return true;
+  }
+  return false;
+}
 
 export async function POST(req: Request) {
   try {
     const { url } = await req.json();
-    if (!url) {
-      return NextResponse.json({ success: false, error: 'URL is required' }, { status: 400 });
+    if (!url || typeof url !== 'string') {
+      return NextResponse.json({ success: false, error: 'URL is required' }, { status: 400, headers: GUUD_SECURITY_HEADERS });
     }
 
     let targetUrl = url.trim();
@@ -12,24 +38,33 @@ export async function POST(req: Request) {
       targetUrl = 'https://' + targetUrl;
     }
 
-    let domain = '';
+    let parsedUrl: URL;
     try {
-      domain = new URL(targetUrl).hostname.replace('www.', '');
+      parsedUrl = new URL(targetUrl);
     } catch {
-      domain = targetUrl;
+      return NextResponse.json({ success: false, error: 'Invalid URL format' }, { status: 400, headers: GUUD_SECURITY_HEADERS });
     }
 
+    if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+      return NextResponse.json({ success: false, error: 'Disallowed protocol' }, { status: 400, headers: GUUD_SECURITY_HEADERS });
+    }
+
+    if (isDisallowedHost(parsedUrl.hostname)) {
+      return NextResponse.json({ success: false, error: 'Scanning internal addresses is forbidden' }, { status: 403, headers: GUUD_SECURITY_HEADERS });
+    }
+
+    const domain = parsedUrl.hostname.replace('www.', '');
     let title = domain.split('.')[0];
     title = title.charAt(0).toUpperCase() + title.slice(1);
     let primaryColor = '#1A1918';
-    let accentColor = '#D97706';
-    let theme = 'editorial';
+    const accentColor = '#D97706';
+    const theme = 'editorial';
 
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 4000);
 
-      const res = await fetch(targetUrl, {
+      const res = await fetch(parsedUrl.toString(), {
         signal: controller.signal,
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -55,7 +90,6 @@ export async function POST(req: Request) {
           // Extract dominant hex color if found
           const hexMatches = html.match(/#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3})/g);
           if (hexMatches && hexMatches.length > 0) {
-            // Pick a non-black, non-white distinctive color
             const candidates = hexMatches.filter(c => !['#000', '#000000', '#fff', '#ffffff', '#111', '#111111'].includes(c.toLowerCase()));
             if (candidates.length > 0) {
               primaryColor = candidates[0];
@@ -63,25 +97,28 @@ export async function POST(req: Request) {
           }
         }
       }
-    } catch (fetchErr) {
-      console.warn('Direct fetch failed, generating harmonic brand palette for domain:', domain);
+    } catch {
       // Deterministic palette based on domain name
       const colors = ['#0F766E', '#1E3A8A', '#B45309', '#15803D', '#7E22CE', '#BE123C'];
       const index = Math.abs(domain.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % colors.length;
       primaryColor = colors[index];
     }
 
-    return NextResponse.json({
-      success: true,
-      brand: {
-        domain,
-        name: title,
-        primaryColor,
-        accentColor,
-        theme,
+    return NextResponse.json(
+      {
+        success: true,
+        brand: {
+          domain,
+          name: title,
+          primaryColor,
+          accentColor,
+          theme,
+        },
       },
-    });
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+      { headers: GUUD_SECURITY_HEADERS }
+    );
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Internal error';
+    return NextResponse.json({ success: false, error: msg }, { status: 500, headers: GUUD_SECURITY_HEADERS });
   }
 }

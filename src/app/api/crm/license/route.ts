@@ -8,14 +8,28 @@ export async function GET(req: Request) {
   const all = searchParams.get('all');
 
   if (all === 'true') {
+    const adminToken = req.headers.get('x-admin-token');
+    const secretAdminKey = process.env.ADMIN_SECRET_KEY || 'guud-admin-supersecret-2026';
+    if (adminToken !== secretAdminKey) {
+      return NextResponse.json(
+        { success: false, error: 'Uautoriseret adgang til samlet licensregister' },
+        { status: 401, headers: GUUD_SECURITY_HEADERS }
+      );
+    }
     return NextResponse.json(
       { success: true, licenses: Object.values(LICENSE_REGISTRY) },
       { headers: GUUD_SECURITY_HEADERS }
     );
   }
 
-  const licenseKey = key || 'GC-AGENCY-4819';
-  const license = LICENSE_REGISTRY[licenseKey.toUpperCase()];
+  if (!key) {
+    return NextResponse.json(
+      { success: false, error: 'Mangler parameter: ?key=<licensnøgle>' },
+      { status: 400, headers: GUUD_SECURITY_HEADERS }
+    );
+  }
+
+  const license = LICENSE_REGISTRY[key.trim().toUpperCase()];
 
   if (!license) {
     return NextResponse.json(
@@ -62,9 +76,10 @@ export async function POST(req: Request) {
       result,
       { status: result.success ? 200 : 403, headers: GUUD_SECURITY_HEADERS }
     );
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Serverfejl under licenshåndtering';
     return NextResponse.json(
-      { success: false, error: err.message || 'Serverfejl under licenshåndtering' },
+      { success: false, error: message },
       { status: 500, headers: GUUD_SECURITY_HEADERS }
     );
   }

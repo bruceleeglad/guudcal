@@ -12,6 +12,19 @@ const TIME_SLOTS = [
   '16:00 - 16:30',
 ];
 
+interface AiResultData {
+  score?: number;
+  tier?: string;
+  summary?: string;
+  fitColor?: string;
+  recommendedMeetingType?: string;
+  keyPainPoint?: string;
+  readyToBook?: boolean;
+  name?: string;
+  company?: string;
+  email?: string;
+}
+
 export default function GuudCalPage() {
   const [variant, setVariant] = useState<'a' | 'b'>('a');
   const [lang, setLang] = useState<Language>('da');
@@ -19,7 +32,7 @@ export default function GuudCalPage() {
   const [answers, setAnswers] = useState<Record<string, { label: string; score: number }>>({});
   const [prospect, setProspect] = useState({ name: '', email: '', company: '' });
   const [isLoadingAi, setIsLoadingAi] = useState(false);
-  const [aiResult, setAiResult] = useState<any>(null);
+  const [aiResult, setAiResult] = useState<AiResultData | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>('I morgen, 4. nov');
   const [selectedSlot, setSelectedSlot] = useState<string>('10:30 - 11:00');
   const [isBooked, setIsBooked] = useState(false);
@@ -55,8 +68,9 @@ export default function GuudCalPage() {
       } else {
         alert(data.error || 'Kunne ikke starte betaling');
       }
-    } catch (e: any) {
-      alert('Fejl under checkout: ' + (e.message || 'Ukendt fejl'));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Ukendt fejl';
+      alert('Fejl under checkout: ' + msg);
     } finally {
       setCheckoutLoading(null);
     }
@@ -79,9 +93,12 @@ export default function GuudCalPage() {
       const params = new URLSearchParams(window.location.search);
       const v = params.get('v');
       const l = params.get('lang') as Language;
-      if (v === 'b') setVariant('b');
-      else if (v === 'a') setVariant('a');
-      if (['da', 'en', 'de', 'sv', 'es', 'fr'].includes(l)) setLang(l);
+      if (v === 'b' || v === 'a') {
+        requestAnimationFrame(() => setVariant(v));
+      }
+      if (['da', 'en', 'de', 'sv', 'es', 'fr'].includes(l)) {
+        requestAnimationFrame(() => setLang(l));
+      }
     }
   }, []);
 

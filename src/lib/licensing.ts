@@ -82,7 +82,7 @@ export function validateLicense(key: string, requestOrigin?: string): LicenseVal
 
   // Domain whitelist validation
   if (requestOrigin) {
-    let host = requestOrigin.replace(/^https?:\/\//, '').split('/')[0].split(':')[0].toLowerCase();
+    const host = requestOrigin.replace(/^https?:\/\//, '').split('/')[0].split(':')[0].toLowerCase();
     
     // Normalize localhost / staging
     const isRegistered = license.registeredDomains.some(d => {
@@ -91,14 +91,12 @@ export function validateLicense(key: string, requestOrigin?: string): LicenseVal
     });
 
     if (!isRegistered) {
-      if (license.registeredDomains.length >= license.maxDomains) {
-        return {
-          valid: false,
-          code: 'DOMAIN_LIMIT_REACHED',
-          message: `Domænegrænse nået for ${license.tier.toUpperCase()} licens (${license.registeredDomains.length}/${license.maxDomains} domæner brugt). Opgrader til Agency Pro for op til 10 domæner.`,
-          license,
-        };
-      }
+      return {
+        valid: false,
+        code: 'UNAUTHORIZED_DOMAIN',
+        message: `Domænet '${host}' er ikke autoriseret på licens (${cleanKey}). Registrér venligst domænet i CRM licenspanelet.`,
+        license,
+      };
     }
   }
 
@@ -118,6 +116,17 @@ export function validateLicense(key: string, requestOrigin?: string): LicenseVal
     message: 'Licens godkendt og aktiv.',
     license,
   };
+}
+
+/**
+ * Increments the monthly lead count for a customer license
+ */
+export function incrementLicenseUsage(key: string): void {
+  const cleanKey = (key || '').trim().toUpperCase();
+  const license = LICENSE_REGISTRY[cleanKey];
+  if (license && license.tier !== 'lifetime') {
+    license.leadsUsedThisMonth += 1;
+  }
 }
 
 /**

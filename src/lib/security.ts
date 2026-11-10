@@ -47,10 +47,14 @@ export function verifyHmacSignature(payload: string, signature: string, secret: 
       .update(payload)
       .digest('hex');
 
-    return crypto.timingSafeEqual(
-      Buffer.from(signature, 'utf8'),
-      Buffer.from(computedSignature, 'utf8')
-    );
+    const sigBuf = Buffer.from(signature, 'utf8');
+    const compBuf = Buffer.from(computedSignature, 'utf8');
+
+    if (sigBuf.length !== compBuf.length) {
+      return false;
+    }
+
+    return crypto.timingSafeEqual(sigBuf, compBuf);
   } catch (err) {
     console.error('HMAC validation error:', err);
     return false;
@@ -63,6 +67,23 @@ export function verifyHmacSignature(payload: string, signature: string, secret: 
 export const GUUD_SECURITY_HEADERS = {
   'X-Engine': 'GuudEngine-Neural-v4',
   'X-Content-Type-Options': 'nosniff',
-  'X-Frame-Options': 'SAMEORIGIN',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
+};
+
+/**
+ * Public API CORS & Security Headers
+ */
+export const GUUD_CORS_HEADERS = {
+  ...GUUD_SECURITY_HEADERS,
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-guudcal-license, x-requested-with',
+};
+
+/**
+ * Embeddable Widget Security Headers (Allows iframes on customer sites)
+ */
+export const GUUD_EMBED_HEADERS = {
+  ...GUUD_SECURITY_HEADERS,
+  'Content-Security-Policy': "frame-ancestors *;",
 };

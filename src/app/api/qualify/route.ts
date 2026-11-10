@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server';
-import { sanitizePromptInput, GUUD_SECURITY_HEADERS } from '@/lib/security';
-import { validateLicense } from '@/lib/licensing';
+import { sanitizePromptInput, GUUD_CORS_HEADERS } from '@/lib/security';
+import { validateLicense, incrementLicenseUsage } from '@/lib/licensing';
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: GUUD_CORS_HEADERS,
+  });
+}
 
 interface LeadPayload {
   name: string;
@@ -21,19 +28,33 @@ export async function POST(req: Request) {
     const { name, email, company, answers, licenseKey } = body;
 
     // 1. Licens & Domænekontrol (Sikrer mod uautoriseret tyveri og overforbrug)
-    const activeKey = licenseKey || licenseHeader || 'GC-LIFE-7721';
+    const activeKey = (licenseKey || licenseHeader || '').trim();
+    if (!activeKey) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Mangler gyldig licensnøgle. Angiv venligst licenseKey i body eller x-license-key header.',
+          code: 'NO_LICENSE'
+        },
+        { status: 401, headers: GUUD_CORS_HEADERS }
+      );
+    }
+
     const validation = validateLicense(activeKey, origin);
 
-    if (!validation.valid && origin && !origin.includes('localhost') && !origin.includes('127.0.0.1')) {
+    if (!validation.valid) {
       return NextResponse.json(
         {
           success: false,
           error: validation.message,
           code: validation.code,
         },
-        { status: 403, headers: GUUD_SECURITY_HEADERS }
+        { status: 403, headers: GUUD_CORS_HEADERS }
       );
     }
+
+    // Inkrementér licenskvote
+    incrementLicenseUsage(activeKey);
 
     // 2. Prompt Injection Sanitization (Beskytter mod system leakage og reverse-engineering)
     const sanitizedName = sanitizePromptInput(name || 'Anonymous');
@@ -116,7 +137,7 @@ Format your exact response as valid JSON with these keys:
 
     return NextResponse.json({
       success: true,
-      licenseTier: validation.license?.tier || 'lifetime',
+      licenseTier: validation.license?.tier || 'solo',
       lead: {
         name: sanitizedName,
         email: sanitizedEmail,
@@ -124,12 +145,13 @@ Format your exact response as valid JSON with these keys:
         ...aiData
       }
     }, {
-      headers: GUUD_SECURITY_HEADERS
+      headers: GUUD_CORS_HEADERS
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to process lead";
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to process lead" },
-      { status: 500, headers: GUUD_SECURITY_HEADERS }
+      { success: false, error: message },
+      { status: 500, headers: GUUD_CORS_HEADERS }
     );
   }
 }

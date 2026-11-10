@@ -1,20 +1,26 @@
 import { NextResponse } from 'next/server';
+import { sanitizePromptInput, GUUD_SECURITY_HEADERS } from '@/lib/security';
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
     const { callerName, callerCompany, callProvider, durationMinutes, transcript } = body;
 
+    const safeName = sanitizePromptInput(callerName || 'Prospect').slice(0, 100);
+    const safeCompany = sanitizePromptInput(callerCompany || 'B2B Client').slice(0, 100);
+    const safeProvider = sanitizePromptInput(callProvider || 'CloudTalk').slice(0, 50);
+    const safeTranscript = sanitizePromptInput(transcript || '').slice(0, 5000);
+
     const apiKey = process.env.OPENROUTER_API_KEY || "";
     const model = process.env.DEEPSEEK_MODEL || "deepseek/deepseek-v4.1-flash-1017";
 
     const prompt = `You are the executive sales intelligence engine for GuudCRM.
-A sales call just finished via ${callProvider || 'CloudTalk'} (${durationMinutes || 18} minutes).
-Analyze the conversation transcript below between the sales executive and the prospect (${callerName || 'Prospect'} from ${callerCompany || 'B2B Client'}).
+A sales call just finished via ${safeProvider} (${durationMinutes || 18} minutes).
+Analyze the conversation transcript below between the sales executive and the prospect (${safeName} from ${safeCompany}).
 
 Transcript:
 """
-${transcript}
+${safeTranscript}
 """
 
 Format your exact output as valid JSON with this structure:
@@ -79,16 +85,20 @@ Format your exact output as valid JSON with this structure:
       };
     }
 
-    return NextResponse.json({
-      success: true,
-      analysis: aiData,
-      meta: {
-        provider: callProvider || 'CloudTalk',
-        durationMinutes: durationMinutes || 18,
-        analyzedAt: new Date().toISOString()
-      }
-    });
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return NextResponse.json(
+      {
+        success: true,
+        analysis: aiData,
+        meta: {
+          provider: safeProvider,
+          durationMinutes: durationMinutes || 18,
+          analyzedAt: new Date().toISOString()
+        }
+      },
+      { headers: GUUD_SECURITY_HEADERS }
+    );
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Internal server error';
+    return NextResponse.json({ success: false, error: message }, { status: 500, headers: GUUD_SECURITY_HEADERS });
   }
 }
